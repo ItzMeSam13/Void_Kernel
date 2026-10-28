@@ -1,5 +1,4 @@
 """
-<<<<<<< HEAD
 Module 2B — Synthetic Text Detection
 Pydantic contracts (input + output). No logic lives here.
 
@@ -35,28 +34,6 @@ class TextInput(BaseModel):
     """What callers pass to Module 2B's run() entrypoint."""
     text: str
     source: TextSource
-=======
-modules/text/contracts.py — Module 2B public contracts (Person 1 owns this).
-
-TextInput / SyntheticTextFindings form the ONLY interface surface of Module 2B.
-architecture.md §Module 2B:
-  "SyntheticTextFindings { score, verdict, method, source, text_length }"
-"""
-from __future__ import annotations
-
-from typing import Literal, Optional
-from pydantic import BaseModel, Field
-
-
-TextSource = Literal["caption", "ocr", "transcript"]
-TextVerdict = Literal["ai_likely", "human_likely", "inconclusive", "not_assessed"]
-
-
-class TextInput(BaseModel):
-    """Input to Module 2B's detect_synthetic_text() entrypoint."""
-    text:   str           = Field(..., description="Plain text to score.")
-    source: TextSource    = Field(..., description="Which module produced this text.")
->>>>>>> d3d2c45df93abffce0459e62fed0f32a1920cf8f
 
 
 class SyntheticTextFindings(BaseModel):

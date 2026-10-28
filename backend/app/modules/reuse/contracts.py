@@ -1,5 +1,4 @@
 """
-<<<<<<< HEAD
 Module 5 — Historical / Out-of-Context Reuse
 Pydantic contracts (input + output). No logic lives here.
 
@@ -92,26 +91,6 @@ class MatchedSource(BaseModel):
     source_published_at: Optional[str] = None   # ISO-8601 string; None if unknown
     source_location: Optional[str] = None        # free-text location stated on source
     reference_caption: Optional[str] = None
-=======
-modules/reuse/contracts.py — Module 5 public contracts (Person 1 owns this).
-
-ReuseInput / ReuseFindings form the ONLY interface surface of Module 5.
-"""
-from __future__ import annotations
-
-from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field
-
-
-ReuseTier = Literal["same", "modified", "different"]
-
-
-class ReuseInput(BaseModel):
-    """Input to Module 5's run() entrypoint."""
-    media_path:  Optional[str]  = Field(None, description="Local path to the media file.")
-    sha256:      Optional[str]  = Field(None, description="Pre-computed SHA-256 to skip recomputation.")
-    image_bytes: Optional[bytes] = Field(None, description="Raw image bytes for pHash (alternative to path).")
->>>>>>> d3d2c45df93abffce0459e62fed0f32a1920cf8f
 
 
 class ReuseFindings(BaseModel):
