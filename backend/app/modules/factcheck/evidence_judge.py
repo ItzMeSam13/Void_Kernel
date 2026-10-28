@@ -23,12 +23,9 @@ output. Zero knowledge of orchestration or other modules.
 from __future__ import annotations
 
 import json
-import os
 import re
 import warnings
 from typing import Optional
-
-import google.generativeai as genai
 
 from .contracts import (
     AtomicClaim,
@@ -37,6 +34,7 @@ from .contracts import (
     SingleClaimFinding,
     Stance,
 )
+from .llm_client import generate
 from .web_search import ECHO_CHAMBER_CONFIDENCE_MULTIPLIER, root_domain
 
 
@@ -53,7 +51,14 @@ def _get_nli_model():
     global _nli_model
     if _nli_model is None:
         from sentence_transformers import CrossEncoder
-        _nli_model = CrossEncoder(_NLI_MODEL_NAME)
+        # Pinned to CPU: on a single small GPU (e.g. a 6GB laptop GPU) this
+        # model competes with Ollama's resident LLM (llm_client.py) for
+        # VRAM and intermittently hits CUDA OOM, which silently disables
+        # the relevance pre-filter (fails open per Guiding Principle 4,
+        # but that means evidence_judge gets unfiltered hits with no
+        # warning the filter even ran). This model is small enough that
+        # CPU inference is fine for the handful of hits per claim.
+        _nli_model = CrossEncoder(_NLI_MODEL_NAME, device="cpu")
     return _nli_model
 
 
@@ -129,13 +134,6 @@ Evidence:
 {evidence_block}"""
 
 
-def _configure_genai() -> None:
-    api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("GOOGLE_API_KEY or GEMINI_API_KEY not set.")
-    genai.configure(api_key=api_key)
-
-
 def _build_evidence_block(filtered: list[tuple[dict, float, Stance]]) -> str:
     lines = []
     for i, (hit, _, _) in enumerate(filtered, 1):
@@ -148,9 +146,16 @@ def _build_evidence_block(filtered: list[tuple[dict, float, Stance]]) -> str:
 
 
 def _parse_judge_response(raw: str) -> dict:
+    """
+    Uses raw_decode() rather than loads() because smaller local models
+    (e.g. phi3:mini via Ollama) sometimes keep generating after a
+    well-formed JSON object instead of stopping cleanly like Gemini does.
+    raw_decode() parses just the first JSON value, ignoring trailing text.
+    """
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s*```$", "", cleaned)
-    return json.loads(cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    obj, _ = json.JSONDecoder().raw_decode(cleaned)
+    return obj
 
 
 def _map_verdict(raw: str) -> EvidenceVerdict:
@@ -222,17 +227,13 @@ def judge_claim(
             judge_reasoning="All retrieved evidence was below relevance threshold.",
         )
 
-    # Step 2: Gemini judge
+    # Step 2: LLM judge (local Ollama by default, swappable to Gemini —
+    # see llm_client.py)
     try:
-        _configure_genai()
-        model = genai.GenerativeModel(
-            model_name=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
-            system_instruction=_JUDGE_SYSTEM,
-        )
         evidence_block = _build_evidence_block(filtered)
         prompt = _JUDGE_USER.format(claim=claim.text, evidence_block=evidence_block)
-        response = model.generate_content(prompt)
-        parsed = _parse_judge_response(response.text)
+        raw_response = generate(_JUDGE_SYSTEM, prompt)
+        parsed = _parse_judge_response(raw_response)
 
         # Build EvidenceItem list
         ev_items: list[EvidenceItem] = []
@@ -270,7 +271,7 @@ def judge_claim(
         )
 
     except Exception as exc:
-        warnings.warn(f"[Module6/evidence_judge] Gemini judge failed: {exc}")
+        warnings.warn(f"[Module6/evidence_judge] LLM judge failed: {exc}")
         # Graceful fallback using NLI pre-filter stances only
         ev_items = [
             EvidenceItem(
