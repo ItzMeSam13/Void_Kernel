@@ -89,6 +89,14 @@ class SnippetMeta(BaseModel):
         default_factory=list,
         description="Paths to saved padded face-crop images for this snippet (written to /tmp/).",
     )
+    keyframe_path: Optional[str] = Field(
+        default=None,
+        description="Path to the full uncropped representative frame for this snippet.",
+    )
+    timestamp_sec: Optional[float] = Field(
+        default=None,
+        description="Timestamp in seconds for the start of this snippet.",
+    )
 
 
 # ---------------------------------------------------------------------------

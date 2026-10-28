@@ -92,6 +92,7 @@ def _build_concrete_evidence(
     spectral: SpectralResult,
     rppg: RppgResult,
     spatial: SpatialResult,
+    max_smaug_prob: Optional[float] = None,
 ) -> list[str]:
     """Build the concrete_evidence list consumed verbatim by Module 7's LLM prompt."""
     evidence: list[str] = []
@@ -140,6 +141,13 @@ def _build_concrete_evidence(
             "consistent with face-swap blending seam."
         )
 
+    # Smaug AI-generation signal from Module 2 keyframe analysis
+    if max_smaug_prob is not None and max_smaug_prob >= 0.50:
+        evidence.append(
+            f"AI-generation evidence: Smaug detector flagged video keyframe as AI-generated "
+            f"(probability: {max_smaug_prob:.2%}) — consistent with generative video synthesis."
+        )
+
     return evidence
 
 
@@ -177,55 +185,82 @@ def fuse(
     spatial: SpatialResult,
     snippet_metas,
     fps: float,
+    frame_analyses: Optional[list[dict]] = None,
 ) -> dict:
     """
-    Weighted-peak fusion of three streams.
-
-    Returns a dict with keys matching VideoFindings fields that Stage 4 fills:
-      verdict, confidence_score, forensic_streams, flagged_segments_sec,
-      concrete_evidence, saliency_heatmap_path.
+    Multi-stream fusion integrating spectral, rPPG, spatial ViT streams,
+    and Module 2 frame-level AI detection findings.
     """
-    # Compute each stream's weighted contribution
-    weighted_scores: dict[str, float] = {}
+    # ── 1. Extract raw stream scores ─────────────────────────────────────
+    stream_scores: dict[str, float] = {}
+    detected_flags: list[str] = []
 
     if spatial.spatial_anomaly_score is not None and spatial.stream_verdict != "not_assessed":
-        weighted_scores["spatial"] = spatial.spatial_anomaly_score * _W_SPATIAL
+        stream_scores["spatial"] = spatial.spatial_anomaly_score
+        if spatial.stream_verdict == "signal_detected" or spatial.spatial_anomaly_score >= 0.55:
+            detected_flags.append("spatial")
 
     if spectral.stream_verdict != "not_assessed":
         sa = spectral.spectral_artifact_score
         if spectral.confounded_by_recompression:
-            sa *= 0.5   # downgrade confounded score
-        weighted_scores["spectral"] = sa * _W_SPECTRAL
+            sa *= 0.6
+        stream_scores["spectral"] = sa
+        if spectral.stream_verdict == "signal_detected" and not spectral.confounded_by_recompression:
+            detected_flags.append("spectral")
 
     if rppg.biometric_pulse_detected is not None:
-        rppg_score = 0.9 if not rppg.biometric_pulse_detected else 0.05
-        weighted_scores["rppg"] = rppg_score * _W_RPPG
+        rppg_score = 0.88 if not rppg.biometric_pulse_detected else 0.05
+        stream_scores["rppg"] = rppg_score
+        if rppg.biometric_pulse_detected is False:
+            detected_flags.append("rppg")
 
-    if not weighted_scores:
+    # Module 2 Smaug signal across sampled keyframes
+    max_smaug_prob: Optional[float] = None
+    if frame_analyses:
+        smaug_probs = [
+            f.get("smaug", {}).get("ai_probability")
+            for f in frame_analyses
+            if f.get("smaug") and f.get("smaug", {}).get("ai_probability") is not None
+        ]
+        if smaug_probs:
+            max_smaug_prob = max(smaug_probs)
+            stream_scores["smaug"] = max_smaug_prob
+            if max_smaug_prob >= 0.50:
+                detected_flags.append("smaug")
+
+    # ── 2. Verdict & Confidence Head ─────────────────────────────────────
+    if not stream_scores:
         verdict = Verdict.NOT_ASSESSED
         confidence_score = None
     else:
-        # Weighted-peak: highest individual contribution drives verdict
-        peak = max(weighted_scores.values())
-        total = sum(weighted_scores.values())
+        peak_score = max(stream_scores.values())
+        num_detections = len(detected_flags)
 
-        # Convergence bonus: ≥ 2 streams agree independently
-        hits = sum(1 for v in weighted_scores.values() if v > 0.15)
-        convergence_bonus = 0.10 if hits >= 2 else 0.0
-
-        raw_conf = peak + convergence_bonus * peak
-        confidence_score = round(min(1.0, raw_conf / max(_W_SPATIAL, _W_SPECTRAL, _W_RPPG)), 4)
-
-        if confidence_score >= _FAKE_THRESHOLD:
+        # Multi-signal convergence: >= 2 independent streams detecting anomalies
+        # is strong convergence evidence (Guiding Principle 1 & spec §4).
+        if num_detections >= 2:
+            convergence_boost = 0.12 * (num_detections - 1)
+            confidence_score = round(min(0.98, max(peak_score, 0.70) + convergence_boost), 4)
             verdict = Verdict.FAKE
-        elif confidence_score <= _REAL_THRESHOLD:
+        elif peak_score >= _FAKE_THRESHOLD or num_detections == 1:
+            if peak_score >= 0.65:
+                confidence_score = round(peak_score, 4)
+                verdict = Verdict.FAKE
+            else:
+                confidence_score = round(peak_score, 4)
+                verdict = Verdict.INCONCLUSIVE
+        elif all(v <= _REAL_THRESHOLD for v in stream_scores.values()) and (
+            rppg.biometric_pulse_detected is True or "rppg" not in stream_scores
+        ):
+            confidence_score = round(1.0 - peak_score, 4)
             verdict = Verdict.REAL
         else:
+            confidence_score = round(peak_score, 4)
             verdict = Verdict.INCONCLUSIVE
 
     logger.info(
-        "Fusion: verdict=%s confidence=%.4f streams=%s",
-        verdict, confidence_score or 0.0, list(weighted_scores.keys()),
+        "Fusion: verdict=%s confidence=%s detections=%s streams=%s",
+        verdict, confidence_score, detected_flags, list(stream_scores.keys()),
     )
 
     return {
@@ -233,6 +268,6 @@ def fuse(
         "confidence_score": confidence_score,
         "forensic_streams": _build_forensic_streams(spectral, rppg, spatial),
         "flagged_segments_sec": _flagged_segments(spectral, rppg, spatial, snippet_metas, fps),
-        "concrete_evidence": _build_concrete_evidence(spectral, rppg, spatial),
+        "concrete_evidence": _build_concrete_evidence(spectral, rppg, spatial, max_smaug_prob=max_smaug_prob),
         "saliency_heatmap_path": spatial.heatmap_path,
     }

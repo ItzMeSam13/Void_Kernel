@@ -347,6 +347,25 @@ class OcrOutput(BaseModel):
 
 # ── ImageFindings — top-level composition output ────────────────────────────
 
+class ImageInput(BaseModel):
+    """Input contract for Module 2 — Image Intelligence composition layer.
+
+    Follows architecture.md §6 canonical module interface:
+        run(input: ImageInput) -> ImageFindings
+    """
+    image_path: str = Field(
+        ...,
+        description="Absolute or relative local file path to the image.",
+    )
+    claim_text: Optional[str] = Field(
+        None,
+        description=(
+            "Optional external factual claim or description to compare with "
+            "the image via CLIP.  Kept distinct from OCR-extracted text."
+        ),
+    )
+
+
 class ClipSkippedReason(str, Enum):
     """Why CLIP was not run during image analysis."""
     NO_CLAIM_PROVIDED = "no_claim_provided"

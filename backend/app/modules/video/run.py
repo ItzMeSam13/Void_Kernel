@@ -132,14 +132,23 @@ def run(input: VideoInput) -> VideoFindings:
 
     # ── Phase 2: Per-frame Module 2 stub calls ─────────────────────────────
     frame_analyses: list[dict] = []
-    if analyze_image_fn is not None and all_crop_paths:
-        for crop_path in all_crop_paths:
+    if analyze_image_fn is not None and snippet_metas:
+        for meta in snippet_metas:
+            target_image = meta.keyframe_path or (meta.face_crop_paths[0] if meta.face_crop_paths else None)
+            if not target_image:
+                continue
             try:
-                findings = analyze_image_fn(crop_path, input.claim_text)
-                frame_analyses.append(findings.model_dump())
+                findings = analyze_image_fn(target_image, input.claim_text)
+                analysis_dict = findings.model_dump()
+                analysis_dict["timestamp_sec"] = meta.timestamp_sec or round(meta.start_frame / fps, 2)
+                analysis_dict["frame_index"] = meta.start_frame
+                analysis_dict["position_pct"] = meta.position_pct
+                analysis_dict["snippet_index"] = meta.snippet_index
+                analysis_dict["is_full_frame"] = (target_image == meta.keyframe_path)
+                frame_analyses.append(analysis_dict)
             except Exception as exc:
-                logger.warning("analyze_image_fn failed on %s: %s", crop_path, exc)
-                errors.append(f"Frame analysis error on {Path(crop_path).name}: {exc}")
+                logger.warning("analyze_image_fn failed on %s: %s", target_image, exc)
+                errors.append(f"Frame analysis error at {round(meta.start_frame / fps, 2)}s: {exc}")
 
     # ── Phase 3: Spatial stream (ViT + attention rollout) ──────────────────
     spatial_results: list[SpatialResult] = []
@@ -154,7 +163,7 @@ def run(input: VideoInput) -> VideoFindings:
 
     # ── Phase 3: Weighted-peak fusion ──────────────────────────────────────
     try:
-        fusion_out = fuse(spectral_agg, rppg_result, spatial_agg, snippet_metas, fps)
+        fusion_out = fuse(spectral_agg, rppg_result, spatial_agg, snippet_metas, fps, frame_analyses=frame_analyses)
     except Exception as exc:
         logger.exception("Fusion failed: %s", exc)
         errors.append(f"Fusion error: {exc}")

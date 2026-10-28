@@ -219,6 +219,15 @@ def extract_snippets(video_path: Path, output_dir: Optional[Path] = None
             cv2.imwrite(str(crop_path), face_crop)
             crop_paths.append(str(crop_path))
 
+        keyframe_path = None
+        if frames:
+            kf_name = f"keyframe_snippet{snippet_idx}_frame{start_frame}.jpg"
+            kf_path = output_dir / kf_name
+            cv2.imwrite(str(kf_path), frames[0])
+            keyframe_path = str(kf_path)
+
+        timestamp_sec = round(start_frame / fps, 2)
+
         results.append(SnippetMeta(
             snippet_index=snippet_idx,
             start_frame=start_frame,
@@ -226,6 +235,8 @@ def extract_snippets(video_path: Path, output_dir: Optional[Path] = None
             position_pct=SNIPPET_POSITIONS[snippet_idx],
             face_detected=face_detected_in_snippet,
             face_crop_paths=crop_paths,
+            keyframe_path=keyframe_path,
+            timestamp_sec=timestamp_sec,
         ))
 
         logger.info(

@@ -109,5 +109,9 @@ def fake_reuse_lookup(phash_hex: str) -> ReuseFindings:
 # Swap points — change these two lines when real modules land
 # ---------------------------------------------------------------------------
 
-analyze_image_fn: Optional[Callable] = fake_analyze_image
+try:
+    from app.modules.image.run import analyze_image as real_analyze_image
+    analyze_image_fn: Optional[Callable] = real_analyze_image
+except ImportError:
+    analyze_image_fn: Optional[Callable] = fake_analyze_image
 reuse_lookup_fn: Optional[Callable] = fake_reuse_lookup

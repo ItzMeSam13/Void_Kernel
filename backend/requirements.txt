@@ -46,7 +46,7 @@ sentencepiece
 # Frame/audio extraction, tri-stream deepfake engine
 # (spectral DCT split, spatial ViT + attention rollout, rPPG)
 # ------------------------------------------------------------------
-mediapipe
+mediapipe==0.10.14
 scipy
 ffmpeg-python               # wraps the system `ffmpeg` binary — install ffmpeg itself via apt/brew, not pip
 scikit-image
@@ -88,3 +88,4 @@ xgboost                     # stretch: per-axis ML fusion head, once labeled fus
 # Module 8 — Evaluation & Robustness Harness (all three, own slice)
 # ------------------------------------------------------------------
 pandas
+pytest
