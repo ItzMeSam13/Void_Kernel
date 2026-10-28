@@ -1,2 +1,89 @@
+# ------------------------------------------------------------------
+# Core / Module 1 + Module 9 — Ingestion, Orchestration, API, Storage
+# (Person 1 — Verifier)
+# ------------------------------------------------------------------
 fastapi
 uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+python-multipart          # file uploads
+httpx
+orjson
+
+arq                        # async job queue (Module 1)
+redis                      # ARQ broker + SHA-256 result cache
+
+supabase                   # Postgres + pgvector + Storage + Auth client (Module 9)
+
+langgraph                  # orchestration layer (built last, per architecture.md §6)
+langchain-core             # only for sub-tasks needing tool-calling/ReAct (reserved, not default)
+
+# ------------------------------------------------------------------
+# Module 2 — Image Intelligence (Person 3)
+# BLIP caption, CLIP similarity, PaddleOCR, Smaug AI-image detector,
+# ManTraNet/BusterNet manipulation localization (ported from document_forgery)
+# ------------------------------------------------------------------
+torch
+torchvision
+transformers
+pillow
+numpy
+opencv-python-headless
+paddleocr
+paddlepaddle                # CPU build; swap for paddlepaddle-gpu if a GPU worker is available
+
+# ------------------------------------------------------------------
+# Module 2B — Synthetic Text Detection (Person 1)
+# Reuses transformers/torch above for the AI-text classifier +
+# optional perplexity-ratio cross-check
+# ------------------------------------------------------------------
+sentencepiece
+
+# ------------------------------------------------------------------
+# Module 3 — Video Intelligence (Person 2)
+# Frame/audio extraction, tri-stream deepfake engine
+# (spectral DCT split, spatial ViT + attention rollout, rPPG)
+# ------------------------------------------------------------------
+mediapipe
+scipy
+ffmpeg-python               # wraps the system `ffmpeg` binary — install ffmpeg itself via apt/brew, not pip
+scikit-image
+
+# ------------------------------------------------------------------
+# Module 4 — Audio Forensics (Person 3)
+# Whisper/faster-whisper transcription, Wav2Vec2 deepfake-audio detection
+# ------------------------------------------------------------------
+faster-whisper
+torchaudio
+soundfile
+librosa
+
+# ------------------------------------------------------------------
+# Module 5 — Historical / Out-of-Context Reuse (Person 1)
+# SHA-256 + pHash fingerprinting, optional reverse-image search
+# ------------------------------------------------------------------
+imagehash
+requests                    # SerpApi reverse-image search client (optional, feature-flagged)
+
+# ------------------------------------------------------------------
+# Module 6 — Fact-Checking & Evidence Engine (Person 1)
+# Claim splitting + NER, adversarial Tavily search, essence-drift guard,
+# DeBERTa NLI pre-filter, Gemini evidence judge / explanation
+# ------------------------------------------------------------------
+tavily-python
+sentence-transformers       # drift guard cosine similarity + DeBERTa NLI cross-encoder
+spacy                       # NER entity-tagging — run `python -m spacy download en_core_web_sm` after install
+google-generativeai         # Gemini (evidence judge + Module 7 explanation)
+
+# ------------------------------------------------------------------
+# Module 7 — Fusion, Aggregation & Explanation (Person 1)
+# Two-level fusion (rules + weighted/ML), per-axis verdicts
+# ------------------------------------------------------------------
+scikit-learn
+xgboost                     # stretch: per-axis ML fusion head, once labeled fusion data exists
+
+# ------------------------------------------------------------------
+# Module 8 — Evaluation & Robustness Harness (all three, own slice)
+# ------------------------------------------------------------------
+pandas
