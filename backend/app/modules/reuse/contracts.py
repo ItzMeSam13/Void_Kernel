@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 Module 5 — Historical / Out-of-Context Reuse
 Pydantic contracts (input + output). No logic lives here.
 
@@ -91,10 +92,31 @@ class MatchedSource(BaseModel):
     source_published_at: Optional[str] = None   # ISO-8601 string; None if unknown
     source_location: Optional[str] = None        # free-text location stated on source
     reference_caption: Optional[str] = None
+=======
+modules/reuse/contracts.py — Module 5 public contracts (Person 1 owns this).
+
+ReuseInput / ReuseFindings form the ONLY interface surface of Module 5.
+"""
+from __future__ import annotations
+
+from typing import Any, Literal, Optional
+from pydantic import BaseModel, Field
+
+
+ReuseTier = Literal["same", "modified", "different"]
+
+
+class ReuseInput(BaseModel):
+    """Input to Module 5's run() entrypoint."""
+    media_path:  Optional[str]  = Field(None, description="Local path to the media file.")
+    sha256:      Optional[str]  = Field(None, description="Pre-computed SHA-256 to skip recomputation.")
+    image_bytes: Optional[bytes] = Field(None, description="Raw image bytes for pHash (alternative to path).")
+>>>>>>> d3d2c45df93abffce0459e62fed0f32a1920cf8f
 
 
 class ReuseFindings(BaseModel):
     """
+<<<<<<< HEAD
     Top-level output contract for Module 5.
 
     Architecture rule (§6): this is the *entire* interface surface of Module 5.
@@ -130,3 +152,24 @@ class ReuseFindings(BaseModel):
             "Guiding Principle 4: fail honest, never silent."
         ),
     )
+=======
+    Output of Module 5's run() entrypoint.
+    Matches the stub in orchestrator/state.py — keep in sync.
+    """
+    exact_match:           bool              = False
+    phash_hamming_distance: Optional[int]   = Field(None,
+        description="Hamming distance to closest match in reference store.")
+    reuse_tier:            Optional[ReuseTier] = Field(None,
+        description="same (<5) | modified (5–15) | different (>15)")
+
+    # Source provenance from matched reference_media row
+    source_url:            Optional[str]    = None
+    source_published_at:   Optional[str]    = None
+    source_location:       Optional[str]    = None
+    source_caption:        Optional[str]    = None
+
+    # Optional reverse-image search results (SerpApi — feature-flagged)
+    reverse_image_results: list[dict[str, Any]] = Field(default_factory=list)
+
+    error:                 Optional[str]    = None
+>>>>>>> d3d2c45df93abffce0459e62fed0f32a1920cf8f
