@@ -25,15 +25,13 @@ module. It does NOT import from any other module.
 from __future__ import annotations
 
 import json
-import os
 import re
 import uuid
 import warnings
 from functools import lru_cache
 
-import google.generativeai as genai
-
 from .contracts import AtomicClaim, ClaimType
+from .llm_client import generate
 
 # ---------------------------------------------------------------------------
 # [PHASE-3] NER entity-tagging
@@ -42,7 +40,7 @@ from .contracts import AtomicClaim, ClaimType
 _NER_MODEL_NAME = "en_core_web_sm"
 
 # spaCy's standard NER labels map directly onto the schema's entity fields.
-_LOCATION_LABELS = ("GPE", "LOC")
+# Location itself is handled separately below (GPE preferred over LOC).
 _DATETIME_LABELS = ("DATE", "TIME")
 _PERSON_LABEL = "PERSON"
 _EVENT_LABEL = "EVENT"
@@ -79,7 +77,14 @@ def _extract_entities(text: str) -> dict:
         warnings.warn(f"[Module6/claim_splitter] NER extraction failed: {exc}")
         return empty
 
-    locations = [e.text for e in doc.ents if e.label_ in _LOCATION_LABELS]
+    # GPE (actual place names: cities, countries) is preferred over LOC
+    # (landmarks, mountains, bodies of water) for the entity x signal
+    # agreement matrix — a landmark name like "The Eiffel Tower" can't be
+    # usefully compared against Module 5's source_location, but it would
+    # otherwise win just by appearing first in sentence order.
+    gpe_locations = [e.text for e in doc.ents if e.label_ == "GPE"]
+    loc_locations = [e.text for e in doc.ents if e.label_ == "LOC"]
+    locations = gpe_locations or loc_locations
     dates = [e.text for e in doc.ents if e.label_ in _DATETIME_LABELS]
     people = [e.text for e in doc.ents if e.label_ == _PERSON_LABEL]
     events = [e.text for e in doc.ents if e.label_ == _EVENT_LABEL]
@@ -124,21 +129,21 @@ _SPLIT_USER = "Text to analyse:\n\n{text}"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _configure_genai() -> None:
-    api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise EnvironmentError(
-            "GOOGLE_API_KEY or GEMINI_API_KEY environment variable is not set."
-        )
-    genai.configure(api_key=api_key)
-
-
 def _parse_llm_json(raw: str) -> list[dict]:
-    """Extract JSON array from LLM response (may be wrapped in markdown fences)."""
+    """
+    Extract JSON array from LLM response (may be wrapped in markdown fences).
+
+    Uses raw_decode() rather than loads() because smaller local models
+    (e.g. phi3:mini via Ollama) sometimes keep generating after a
+    well-formed JSON array — echoing the prompt or hallucinating another
+    example — instead of stopping cleanly like Gemini does. raw_decode()
+    parses just the first JSON value and ignores anything trailing it.
+    """
     # Strip ```json ... ``` fences if present
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s*```$", "", cleaned)
-    return json.loads(cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    obj, _ = json.JSONDecoder().raw_decode(cleaned)
+    return obj
 
 
 def _make_claim(idx: int, raw: dict) -> AtomicClaim:
@@ -167,8 +172,8 @@ def split_claims(text: str) -> list[AtomicClaim]:
     """
     Split `text` into a list of AtomicClaim objects.
 
-    Uses Gemini (Flash) for splitting, matching the document_forgery
-    Gemini semantic-validation call pattern (Asset Reuse Matrix).
+    Uses llm_client.generate() — local Ollama by default, swappable to
+    Gemini via FACTCHECK_LLM_BACKEND (see llm_client.py).
 
     Falls back to returning the full text as a single untyped FACT claim
     if the LLM call fails, rather than raising — the pipeline continues
@@ -178,13 +183,8 @@ def split_claims(text: str) -> list[AtomicClaim]:
         return []
 
     try:
-        _configure_genai()
-        model = genai.GenerativeModel(
-            model_name=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
-            system_instruction=_SPLIT_SYSTEM,
-        )
-        response = model.generate_content(_SPLIT_USER.format(text=text))
-        raw_list = _parse_llm_json(response.text)
+        raw_text = generate(_SPLIT_SYSTEM, _SPLIT_USER.format(text=text))
+        raw_list = _parse_llm_json(raw_text)
         return [_make_claim(i, r) for i, r in enumerate(raw_list) if "text" in r]
 
     except Exception as exc:

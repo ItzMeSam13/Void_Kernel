@@ -75,7 +75,8 @@ requests                    # SerpApi reverse-image search client (optional, fea
 tavily-python
 sentence-transformers       # drift guard cosine similarity + DeBERTa NLI cross-encoder
 spacy                       # NER entity-tagging — run `python -m spacy download en_core_web_sm` after install
-google-generativeai         # Gemini (evidence judge + Module 7 explanation)
+google-generativeai         # Gemini backend for claim_splitter/evidence_judge (FACTCHECK_LLM_BACKEND=gemini)
+langchain-ollama            # local Ollama backend for claim_splitter/evidence_judge (default — see llm_client.py)
 
 # ------------------------------------------------------------------
 # Module 7 — Fusion, Aggregation & Explanation (Person 1)
