@@ -38,7 +38,6 @@ class TextInput(BaseModel):
 
 class SyntheticTextFindings(BaseModel):
     """
-<<<<<<< HEAD
     Top-level output contract for Module 2B.  Frozen at end of Phase 1.
 
     Architecture note (§Module 2B):
@@ -78,17 +77,3 @@ class SyntheticTextFindings(BaseModel):
         default=None,
         description="Set when scoring could not complete. Fail honest, never silent.",
     )
-=======
-    Output of Module 2B's detect_synthetic_text() entrypoint.
-    Matches the stub in orchestrator/state.py — keep in sync.
-    """
-    score:       Optional[float]   = Field(None, ge=0.0, le=1.0,
-        description="Probability text is AI-generated (0=human, 1=AI).")
-    verdict:     TextVerdict       = "not_assessed"
-    method:      Optional[str]     = Field(None,
-        description="Classifier name used (e.g. 'roberta-base-openai-detector').")
-    source:      Optional[str]     = Field(None,
-        description="caption | ocr | transcript — which text was scored.")
-    text_length: Optional[int]     = None
-    error:       Optional[str]     = None
->>>>>>> d3d2c45df93abffce0459e62fed0f32a1920cf8f
