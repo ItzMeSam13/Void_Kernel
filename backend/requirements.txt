@@ -27,6 +27,7 @@ langchain-core             # only for sub-tasks needing tool-calling/ReAct (rese
 torch
 torchvision
 transformers
+huggingface_hub             # explicit dep for Smaug snapshot_download (transitive via transformers, pinned here for clarity)
 pillow
 numpy
 opencv-python-headless
