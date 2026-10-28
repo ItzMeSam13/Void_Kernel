@@ -34,6 +34,19 @@ class Settings(BaseSettings):
     ENABLE_SERPAPI_REVERSE_IMAGE: bool = False
     SERPAPI_KEY: str = ""
 
+    # ── Audio / Whisper (Module 4) ───────────────────────────────────
+    WHISPER_MODEL_SIZE: str = "small"
+    WHISPER_DEVICE: str = "auto"
+    WHISPER_COMPUTE_TYPE: str = "default"
+    WHISPER_DOWNLOAD_ROOT: str | None = None
+
+    # ── Synthetic Audio / Wav2Vec2 (Module 4) ─────────────────────────
+    DEEPFAKE_AUDIO_MODEL_ID: str = "mo-thecreator/Deepfake-audio-detection"
+    DEEPFAKE_AUDIO_DEVICE: str = "auto"
+    DEEPFAKE_AUDIO_THRESHOLD: float = 0.65
+    DEEPFAKE_AUDIO_WINDOW_SEC: float = 5.0
+    DEEPFAKE_AUDIO_OVERLAP_SEC: float = 1.0
+
     # ── Cache ─────────────────────────────────────────────────────────
     RESULT_CACHE_TTL_SECONDS: int = 60 * 60 * 24 * 7  # 7 days
 
