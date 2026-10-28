@@ -1,26 +1,194 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────
+   DESIGN TOKENS  (Section 2 of design.md)
+   All color, radius, and spacing values live here.
+   Never hardcode hex values in components.
+   ────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Page backdrop */
+  --bg-backdrop:      #CBCEDC;
+  --bg-backdrop-line: rgba(255,255,255,0.55);
+
+  /* App shell */
+  --ink-900:  #0E0E10;
+  --ink-800:  #17171A;
+  --ink-700:  #26262B;
+  --ink-500:  #6B6B75;
+  --ink-400:  #8E8E99;
+  --ink-200:  #E4E4EA;
+  --ink-100:  #F1F1F5;
+  --sheet:    #F8F8F6;
+  --card:     #FFFFFF;
+
+  /* Text */
+  --text-on-dark:       #FFFFFF;
+  --text-on-dark-muted: #9A9AA6;
+  --text-on-light:      #111114;
+
+  /* Accent */
+  --accent-sky:      #7CC4F8;
+  --accent-sky-600:  #4AA8EE;
+
+  /* Pastel card fills */
+  --pastel-peach:    #FFE1CE;
+  --pastel-mint:     #D6F5EA;
+  --pastel-lavender: #E3DDF8;
+  --pastel-sky:      #DDEFFC;
+  --pastel-pink:     #F9DDEE;
+  --pastel-grey:     #ECEDF5;
+
+  /* Status */
+  --status-signal:       #E8667A;
+  --status-clear:        #2FAE8F;
+  --status-inconclusive: #E0A23A;
+  --status-na:           #8E8E99;
+
+  /* Radius scale */
+  --r-sm:   12px;
+  --r-md:   20px;
+  --r-lg:   28px;
+  --r-xl:   40px;
+  --r-pill: 999px;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* ── Tailwind v4 @theme mapping ───────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-backdrop: var(--bg-backdrop);
+  --color-backdrop-line: var(--bg-backdrop-line);
+
+  --color-ink-900: var(--ink-900);
+  --color-ink-800: var(--ink-800);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-ink-200: var(--ink-200);
+  --color-ink-100: var(--ink-100);
+  --color-sheet: var(--sheet);
+  --color-card: var(--card);
+
+  --color-text-on-dark: var(--text-on-dark);
+  --color-text-on-dark-muted: var(--text-on-dark-muted);
+  --color-text-on-light: var(--text-on-light);
+
+  --color-accent-sky: var(--accent-sky);
+  --color-accent-sky-600: var(--accent-sky-600);
+
+  --color-pastel-peach: var(--pastel-peach);
+  --color-pastel-mint: var(--pastel-mint);
+  --color-pastel-lavender: var(--pastel-lavender);
+  --color-pastel-sky: var(--pastel-sky);
+  --color-pastel-pink: var(--pastel-pink);
+  --color-pastel-grey: var(--pastel-grey);
+
+  --color-status-signal: var(--status-signal);
+  --color-status-clear: var(--status-clear);
+  --color-status-inconclusive: var(--status-inconclusive);
+  --color-status-na: var(--status-na);
+
+  --font-display: var(--font-manrope);
+  --font-body: var(--font-inter);
+  --font-mono: var(--font-ibm-plex-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Base styles ──────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-backdrop);
+  color: var(--text-on-light);
+  font-family: var(--font-inter), 'Noto Sans Devanagari', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Focus ring (design 4.8) ─────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--accent-sky-600);
+  outline-offset: 2px;
+}
+
+/* ── Reduced motion ──────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Skeleton shimmer ────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--ink-200) 25%,
+    var(--ink-100) 50%,
+    var(--ink-200) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--r-md);
+}
+
+/* ── Stagger animation for cards ─────────────────────── */
+
+@keyframes fadeRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-enter {
+  animation: fadeRise 200ms var(--ease-out) both;
+}
+
+/* ── Scrollbar styling ───────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ink-200);
+  border-radius: var(--r-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-400);
+}
+
+/* ── Noise texture for promo card ────────────────────── */
+
+.noise-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
 }
