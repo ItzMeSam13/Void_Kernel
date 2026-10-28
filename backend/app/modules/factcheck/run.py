@@ -16,8 +16,24 @@ Phase 1 flow:
   5. Compute aggregate verdict + confidence.
   6. Return ClaimFindings.
 
-Phase 1 skips: drift guard (always passes), echo-chamber detection,
+Phase 1 skipped: drift guard (always passed), echo-chamber detection,
 NER entity-tagging, entity × signal agreement matrix.
+
+Phase 3 flow adds, on top of the above:
+  2. Drift guard now runs the real sentence-transformers check (surfaced
+     in ClaimFindings.drift_detected/drift_score — never gates the
+     pipeline itself, per Guiding Principle 1).
+  3. inp.ocr_scene_text (Module 2's widened-scope OCR) is folded into the
+     adversarial search as extra disambiguating context.
+  3b. Each claim's combined hits are run through echo-chamber detection;
+      a flagged claim's confidence is scaled by evidence_judge's
+      ECHO_CHAMBER_CONFIDENCE_MULTIPLIER and its dominant-domain evidence
+      items are tagged.
+  4b. Each finding's entity x signal agreement matrix is built against
+      Module 5's source metadata (inp.reuse_source_location /
+      inp.reuse_source_published_at).
+  5b. Aggregate echo_chamber_detected/unique_source_domains are rolled up
+      across all claims.
 
 Guiding Principle 4 (fail honest): any unhandled exception returns a
 ClaimFindings with error set and overall_verdict=UNVERIFIABLE.
@@ -36,8 +52,9 @@ from .contracts import (
     FactCheckInput,
 )
 from .drift_guard import check_drift
+from .entity_crosscheck import build_entity_signal_agreement
 from .evidence_judge import judge_claim
-from .web_search import adversarial_search_async, google_fact_check_search
+from .web_search import adversarial_search_async, detect_echo_chamber, google_fact_check_search
 
 
 # ---------------------------------------------------------------------------
@@ -106,15 +123,18 @@ async def _run_async(
             error="No claims could be extracted from the input text.",
         )
 
-    # Step 2: drift guard (Phase 3 — always passes in Phase 1)
+    # Step 2: drift guard — real sentence-transformers check (Phase 3).
+    # Surfaced on the output, never gates the pipeline (Guiding Principle 1).
     recomposed = [c.text for c in claims]
     drift_detected, drift_score = check_drift(inp.text, recomposed)
-    # If drift is detected (Phase 3+), we could flag and return early.
-    # In Phase 1 drift_detected is always False, so this is a no-op.
+
+    # Phase 3: widened-scope OCR scene text (Module 2) folded into search
+    # as extra disambiguating context, same context for every claim here.
+    search_context = extra_context or inp.ocr_scene_text
 
     # Step 3: concurrent adversarial search across all claims
     search_tasks = [
-        adversarial_search_async(claim.text, extra_context=extra_context)
+        adversarial_search_async(claim.text, extra_context=search_context)
         for claim in claims
     ]
     # Also run Google Fact Check in parallel (sync calls wrapped)
@@ -125,12 +145,36 @@ async def _run_async(
 
     # Step 4: judge each claim
     findings = []
+    echo_chamber_flags: list[bool] = []
+    domain_counts: list[int] = []
     for claim, raw_search, gfc_hits in zip(claims, search_results, gfc_hits_per_claim):
         if isinstance(raw_search, Exception):
             warnings.warn(f"[Module6/run] Search failed for claim '{claim.claim_id}': {raw_search}")
             raw_search = []
         combined_hits = list(raw_search) + list(gfc_hits)
-        finding = judge_claim(claim, combined_hits)
+
+        # Phase 3: echo-chamber detection over this claim's evidence set.
+        flagged, unique_domains, dominant_domains = detect_echo_chamber(combined_hits)
+        echo_chamber_flags.append(flagged)
+        if combined_hits:
+            domain_counts.append(unique_domains)
+
+        finding = judge_claim(
+            claim,
+            combined_hits,
+            extra_context=search_context,
+            echo_chamber_flagged=flagged,
+            dominant_domains=dominant_domains,
+        )
+
+        # Phase 3: entity x signal agreement matrix against Module 5's
+        # source metadata (None/None when no Module 5 match exists).
+        finding.entity_signal_agreement = build_entity_signal_agreement(
+            claim,
+            reuse_source_location=inp.reuse_source_location,
+            reuse_source_published_at=inp.reuse_source_published_at,
+        )
+
         findings.append(finding)
 
     # Step 5: aggregate
@@ -150,6 +194,8 @@ async def _run_async(
         overall_confidence=round(final_confidence, 4),
         drift_detected=drift_detected,
         drift_score=drift_score,
+        echo_chamber_detected=any(echo_chamber_flags) if echo_chamber_flags else None,
+        unique_source_domains=min(domain_counts) if domain_counts else None,
     )
 
 

@@ -37,6 +37,7 @@ from .contracts import (
     SingleClaimFinding,
     Stance,
 )
+from .web_search import ECHO_CHAMBER_CONFIDENCE_MULTIPLIER, root_domain
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,8 @@ def judge_claim(
     claim: AtomicClaim,
     raw_hits: list[dict],
     extra_context: Optional[str] = None,
+    echo_chamber_flagged: bool = False,
+    dominant_domains: Optional[set[str]] = None,
 ) -> SingleClaimFinding:
     """
     Evaluate `raw_hits` against `claim` and return a SingleClaimFinding.
@@ -189,8 +192,16 @@ def judge_claim(
       2. Single Gemini call over surviving evidence.
       3. Map LLM JSON → EvidenceItem list + SingleClaimFinding.
 
+    [PHASE-3] `echo_chamber_flagged`/`dominant_domains` come from
+    web_search.detect_echo_chamber() over this claim's combined hits
+    (architecture.md §Module 6, step 4): EvidenceItems whose domain is
+    "dominant" are tagged, and confidence is scaled by
+    ECHO_CHAMBER_CONFIDENCE_MULTIPLIER when the claim's evidence set as a
+    whole is flagged.
+
     Falls back to UNVERIFIABLE with an error note if all steps fail.
     """
+    dominant_domains = dominant_domains or set()
     if not raw_hits:
         return SingleClaimFinding(
             claim=claim,
@@ -240,11 +251,14 @@ def judge_claim(
                     stance=_map_stance(raw_ev.get("stance", "neutral")),
                     relevance_score=float(raw_ev.get("relevance", nli_relevance)),
                     source_type=orig_hit.get("_source_type", "web"),
+                    echo_chamber_flagged=root_domain(orig_hit) in dominant_domains,
                 )
             )
 
         verdict = _map_verdict(parsed.get("verdict", "uncertain"))
         confidence = float(parsed.get("confidence", 0.5))
+        if echo_chamber_flagged:
+            confidence = round(confidence * ECHO_CHAMBER_CONFIDENCE_MULTIPLIER, 4)
         reasoning = parsed.get("reasoning", "")
 
         return SingleClaimFinding(
@@ -266,6 +280,7 @@ def judge_claim(
                 stance=stance,
                 relevance_score=relevance,
                 source_type=hit.get("_source_type", "web"),
+                echo_chamber_flagged=root_domain(hit) in dominant_domains,
             )
             for hit, relevance, stance in filtered
         ]
@@ -278,10 +293,14 @@ def judge_claim(
         else:
             verdict = EvidenceVerdict.UNVERIFIABLE
 
+        fallback_confidence = 0.4
+        if echo_chamber_flagged:
+            fallback_confidence = round(fallback_confidence * ECHO_CHAMBER_CONFIDENCE_MULTIPLIER, 4)
+
         return SingleClaimFinding(
             claim=claim,
             verdict=verdict,
-            confidence=0.4,
+            confidence=fallback_confidence,
             evidence=ev_items,
             judge_reasoning=f"LLM judge unavailable ({exc}); verdict from NLI pre-filter only.",
         )

@@ -4,7 +4,14 @@ Splits raw input text into atomic, checkable claims.
 
 Phase 1 scope (team_roadmaps.md):
   - Claim splitting + Veritas-ported claim_type / loaded_language tagging.
-  - NER entity-tagging (location/datetime/named_people/event) is [PHASE-3].
+
+Phase 3 scope (team_roadmaps.md):
+  - NER entity-tagging (location/datetime/named_people/event), extending
+    the Veritas-ported fields above. This is what makes the entity x
+    signal agreement matrix (architecture.md §Module 6, step 7;
+    entity_crosscheck.py) possible — without entity tags there is
+    nothing concrete to cross-reference against Module 5's source
+    metadata.
 
 Architecture reference:
   - Reuse Veritas's `type: fact | framing | attributed` tagging and
@@ -21,10 +28,68 @@ import json
 import os
 import re
 import uuid
+import warnings
+from functools import lru_cache
 
 import google.generativeai as genai
 
 from .contracts import AtomicClaim, ClaimType
+
+# ---------------------------------------------------------------------------
+# [PHASE-3] NER entity-tagging
+# ---------------------------------------------------------------------------
+
+_NER_MODEL_NAME = "en_core_web_sm"
+
+# spaCy's standard NER labels map directly onto the schema's entity fields.
+_LOCATION_LABELS = ("GPE", "LOC")
+_DATETIME_LABELS = ("DATE", "TIME")
+_PERSON_LABEL = "PERSON"
+_EVENT_LABEL = "EVENT"
+
+
+@lru_cache(maxsize=1)
+def _get_nlp():
+    """Lazily load the spaCy pipeline once per process."""
+    import spacy
+
+    try:
+        return spacy.load(_NER_MODEL_NAME)
+    except OSError as exc:
+        raise RuntimeError(
+            f"spaCy model '{_NER_MODEL_NAME}' not installed. "
+            f"Run: python -m spacy download {_NER_MODEL_NAME}"
+        ) from exc
+
+
+def _extract_entities(text: str) -> dict:
+    """
+    Tag `text` with location / datetime_ref / named_people / event_ref.
+
+    Fails open (all fields empty) on any spaCy/model error — Guiding
+    Principle 4: fail honest, never block claim splitting on this.
+    """
+    empty = {"location": None, "datetime_ref": None, "named_people": [], "event_ref": None}
+    if not text.strip():
+        return empty
+
+    try:
+        doc = _get_nlp()(text)
+    except Exception as exc:
+        warnings.warn(f"[Module6/claim_splitter] NER extraction failed: {exc}")
+        return empty
+
+    locations = [e.text for e in doc.ents if e.label_ in _LOCATION_LABELS]
+    dates = [e.text for e in doc.ents if e.label_ in _DATETIME_LABELS]
+    people = [e.text for e in doc.ents if e.label_ == _PERSON_LABEL]
+    events = [e.text for e in doc.ents if e.label_ == _EVENT_LABEL]
+
+    return {
+        "location": locations[0] if locations else None,
+        "datetime_ref": dates[0] if dates else None,
+        "named_people": people,
+        "event_ref": events[0] if events else None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -83,11 +148,14 @@ def _make_claim(idx: int, raw: dict) -> AtomicClaim:
     except ValueError:
         claim_type = ClaimType.FACT  # safe default
 
+    entities = _extract_entities(raw["text"])
+
     return AtomicClaim(
         claim_id=f"c{idx + 1}_{uuid.uuid4().hex[:6]}",
         text=raw["text"],
         claim_type=claim_type,
         loaded_language=raw.get("loaded_language", []),
+        **entities,
     )
 
 
@@ -120,7 +188,6 @@ def split_claims(text: str) -> list[AtomicClaim]:
         return [_make_claim(i, r) for i, r in enumerate(raw_list) if "text" in r]
 
     except Exception as exc:
-        import warnings
         warnings.warn(f"[Module6/claim_splitter] LLM call failed: {exc}. Falling back.")
         return [
             AtomicClaim(
@@ -128,5 +195,6 @@ def split_claims(text: str) -> list[AtomicClaim]:
                 text=text,
                 claim_type=ClaimType.FACT,
                 loaded_language=[],
+                **_extract_entities(text),
             )
         ]

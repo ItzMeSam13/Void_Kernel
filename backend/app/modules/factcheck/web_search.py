@@ -10,8 +10,9 @@ Architecture reference (§Module 6, step 3):
     dual-search pattern reused; fact-checking content re-targeted.
 
 Phase 1 scope: adversarial search only.
-  Phase 3 adds: echo-chamber detection (flag when ≥3 results share a root
-  domain or <3 unique domains appear total; 0.75× confidence multiplier).
+Phase 3 adds: echo-chamber detection (architecture.md §Module 6, step 4 —
+  flag when ≥3 results share a root domain or <3 unique domains appear
+  total; 0.75× confidence multiplier, applied by evidence_judge.py).
 
 Isolation: takes a plain string (claim text), returns list[dict] raw hits.
 The evidence_judge.py layer converts these to EvidenceItem objects.
@@ -21,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import os
 from typing import Optional
+from urllib.parse import urlparse
 
 from tavily import TavilyClient, AsyncTavilyClient
 
@@ -157,3 +159,45 @@ def google_fact_check_search(claim_text: str, max_results: int = 5) -> list[dict
         import warnings
         warnings.warn(f"[Module6/web_search] Google Fact Check API failed: {exc}")
         return []
+
+
+# ---------------------------------------------------------------------------
+# [PHASE-3] Echo-chamber detection
+# ---------------------------------------------------------------------------
+
+# architecture.md §Module 6, step 4 — Veritas's thresholds/multiplier.
+ECHO_CHAMBER_DOMAIN_REPEAT_THRESHOLD = 3  # a single domain appearing ≥3 times
+ECHO_CHAMBER_MIN_UNIQUE_DOMAINS = 3        # fewer than 3 unique domains total
+ECHO_CHAMBER_CONFIDENCE_MULTIPLIER = 0.75
+
+
+def root_domain(hit: dict) -> str:
+    url = hit.get("url") or hit.get("source_url") or ""
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
+
+
+def detect_echo_chamber(hits: list[dict]) -> tuple[bool, int, set[str]]:
+    """
+    Flag echo-chamber risk across a set of search hits for one claim.
+
+    Returns (flagged, unique_domain_count, dominant_domains):
+      - flagged: True when any domain appears >= ECHO_CHAMBER_DOMAIN_REPEAT_THRESHOLD
+        times, or fewer than ECHO_CHAMBER_MIN_UNIQUE_DOMAINS unique domains
+        appear across all hits.
+      - unique_domain_count: number of distinct root domains seen.
+      - dominant_domains: the domains that individually hit the repeat
+        threshold — used by evidence_judge.py to tag individual EvidenceItems.
+    """
+    domains = [d for d in (root_domain(h) for h in hits) if d]
+    if not domains:
+        return False, 0, set()
+
+    counts: dict[str, int] = {}
+    for d in domains:
+        counts[d] = counts.get(d, 0) + 1
+
+    dominant = {d for d, c in counts.items() if c >= ECHO_CHAMBER_DOMAIN_REPEAT_THRESHOLD}
+    unique_count = len(counts)
+    flagged = bool(dominant) or unique_count < ECHO_CHAMBER_MIN_UNIQUE_DOMAINS
+    return flagged, unique_count, dominant

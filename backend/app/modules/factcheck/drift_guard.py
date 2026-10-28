@@ -1,6 +1,6 @@
 """
 Module 6 — drift_guard.py
-Essence/Claim Drift Guard (Phase 3 — stub in Phase 1).
+Essence/Claim Drift Guard (Phase 3).
 
 Architecture reference (§Module 6, step 2):
   "[Improvement] Essence Drift Guard — cosine-similarity check (local
@@ -9,20 +9,33 @@ Architecture reference (§Module 6, step 2):
    a bad OCR read or bad Whisper transcript silently becomes the 'claim'
    that gets fact-checked, and nobody notices."
 
-Phase 1: this file exists as a typed stub so the module's interface is
-complete. The guard always returns drift_detected=False and drift_score=None
-in Phase 1. Phase 3 will fill in the real implementation.
+Phase 1: this file existed as a typed stub, always returning
+drift_detected=False / drift_score=None, so the module's interface was
+complete without blocking on the model.
 
-Consumers (run.py) check drift_detected before proceeding; the stub
-simply never blocks — safe default for Phase 1.
+Phase 3: real sentence-transformers cosine-similarity check. Consumers
+(run.py) surface drift_detected/drift_score in ClaimFindings per Guiding
+Principle 1 (never collapse findings) — this module does not itself
+decide to abort fact-checking on drift, it only reports it honestly.
 """
 from __future__ import annotations
 
+import warnings
+from functools import lru_cache
 from typing import Optional
 
-
-# Phase 3 threshold — cosine distance above which drift is flagged
+# Cosine distance (1 - similarity) above which drift is flagged.
 DRIFT_THRESHOLD = 0.35
+
+_MODEL_NAME = "all-MiniLM-L6-v2"
+
+
+@lru_cache(maxsize=1)
+def _get_model():
+    """Lazily load the sentence-transformers model once per process."""
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(_MODEL_NAME)
 
 
 def check_drift(
@@ -33,20 +46,26 @@ def check_drift(
     Compare `original_text` to the recomposed string of extracted claims
     using sentence-transformers cosine similarity.
 
-    Phase 1: always returns (False, None) — drift guard is a Phase 3 feature.
-    Phase 3: replace the body below with the real sentence-transformers call.
-
     Returns:
       (drift_detected: bool, drift_score: float | None)
       drift_score is the cosine *distance* (1 - similarity), 0 = identical.
+      drift_score is None, drift_detected is False, when the check could
+      not complete — fail open rather than block fact-checking on an
+      unrelated model-loading failure (Guiding Principle 4).
     """
-    # [PHASE-3] Implementation placeholder
-    # from sentence_transformers import SentenceTransformer, util
-    # model = SentenceTransformer("all-MiniLM-L6-v2")
-    # recomposed = " ".join(recomposed_claims)
-    # emb_orig = model.encode(original_text, convert_to_tensor=True)
-    # emb_recomp = model.encode(recomposed, convert_to_tensor=True)
-    # similarity = float(util.cos_sim(emb_orig, emb_recomp)[0][0])
-    # distance = 1.0 - similarity
-    # return distance > DRIFT_THRESHOLD, distance
-    return False, None
+    if not original_text.strip() or not recomposed_claims:
+        return False, None
+
+    try:
+        from sentence_transformers import util
+
+        model = _get_model()
+        recomposed = " ".join(recomposed_claims)
+        emb_orig = model.encode(original_text, convert_to_tensor=True)
+        emb_recomp = model.encode(recomposed, convert_to_tensor=True)
+        similarity = float(util.cos_sim(emb_orig, emb_recomp)[0][0])
+        distance = round(1.0 - similarity, 4)
+        return distance > DRIFT_THRESHOLD, distance
+    except Exception as exc:
+        warnings.warn(f"[Module6/drift_guard] Drift check failed: {exc}. Failing open.")
+        return False, None

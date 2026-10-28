@@ -136,6 +136,11 @@ class FactCheckInput(BaseModel):
     reuse_source_published_at: Optional[str] = None
     reuse_source_location: Optional[str] = None
 
+    # [PHASE-3] Widened-scope OCR scene text from Module 2 (street signs,
+    # storefronts, banners) — folded into the adversarial search as extra
+    # disambiguating context (architecture.md §Module 6, step 7).
+    ocr_scene_text: Optional[str] = None
+
 
 class ClaimFindings(BaseModel):
     """
