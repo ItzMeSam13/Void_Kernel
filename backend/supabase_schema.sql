@@ -98,8 +98,8 @@ CREATE TABLE IF NOT EXISTS reference_media (
     published_at    TIMESTAMPTZ,
     source_location TEXT,                     -- location stated on the matched page/article
     caption         TEXT,                     -- caption / description on the source page
-    modality        TEXT                      -- image | video | audio
-                    CHECK (modality IN ('image', 'video', 'audio')),
+    modality        TEXT                      -- image | video_keyframe | document
+                    CHECK (modality IN ('image', 'video_keyframe', 'document')),
 
     -- Supabase Storage path for the reference media file itself (optional)
     storage_path    TEXT

@@ -29,7 +29,7 @@ class ReferenceMediaRow(BaseModel):
     published_at:     Optional[str]  = None
     source_location:  Optional[str]  = None
     caption:          Optional[str]  = None
-    modality:         Optional[str]  = None  # image | video | audio
+    modality:         Optional[str]  = None  # image | video_keyframe | document
 
 
 class ReferenceLookupResponse(BaseModel):
