@@ -1,26 +1,149 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Warm cream tablet / dashboard canvas */
+  --bg-canvas: #F5F1E8;
+  --bg-card: #FFFFFF;
+  --border-subtle: #E8E3D7;
+
+  /* Board Pastel Cards */
+  --pastel-lavender-board: #E3DAF8;
+  --pastel-peach-board: #FFBEA8;
+  --pastel-sky-board: #B4DBFA;
+  --pastel-yellow-board: #FDF0C6;
+
+  /* Page backdrop (lavender-grey behind main sheet) */
+  --bg-backdrop: #F5F1E8;
+  --bg-backdrop-line: rgba(255, 255, 255, 0.55);
+
+  /* App shell */
+  --ink-900: #0E0E10;   /* top bar, promo card, primary buttons */
+  --ink-800: #17171A;
+  --ink-700: #26262B;   /* hairlines on dark */
+  --ink-500: #6B6B75;   /* muted text on light */
+  --ink-400: #8E8E99;   /* labels, placeholders */
+  --ink-200: #E4E4EA;   /* borders on light */
+  --ink-100: #F1F1F5;
+  --sheet:   #F8F8F6;   /* main content surface */
+  --card:    #FFFFFF;   /* card outer shell */
+
+  /* Text */
+  --text-on-dark:       #FFFFFF;
+  --text-on-dark-muted: #9A9AA6;
+  --text-on-light:      #111114;
+
+  /* Accent */
+  --accent-sky:     #7CC4F8;   /* slider handles, CTA button, active dots */
+  --accent-sky-600: #4AA8EE;
+
+  /* Pastel card fills (inner colored panel) */
+  --pastel-peach:    #FFE1CE;  /* Claim veracity */
+  --pastel-mint:     #D6F5EA;  /* Media authenticity */
+  --pastel-lavender: #E3DDF8;  /* Cross-modal consistency */
+  --pastel-sky:      #DDEFFC;  /* Historical reuse & upload dropzone */
+  --pastel-pink:     #F9DDEE;  /* Supporting panels */
+  --pastel-grey:     #ECEDF5;  /* Explanation panel */
+
+  /* Status */
+  --status-signal:       #E8667A;  /* signal detected / contradicted */
+  --status-clear:        #2FAE8F;  /* no strong signal / supported */
+  --status-inconclusive: #E0A23A;  /* inconclusive / uncertain */
+  --status-na:           #8E8E99;  /* not assessed / unavailable */
+
+  /* Radii scale */
+  --r-sm:   12px;
+  --r-md:   20px;
+  --r-lg:   28px;
+  --r-xl:   40px;
+  --r-pill: 999px;
+
+  /* Fonts */
+  --font-display: 'Manrope', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Geist Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  --color-bg-backdrop: var(--bg-backdrop);
+  --color-bg-backdrop-line: var(--bg-backdrop-line);
+  --color-ink-900: var(--ink-900);
+  --color-ink-800: var(--ink-800);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-ink-200: var(--ink-200);
+  --color-ink-100: var(--ink-100);
+  --color-sheet: var(--sheet);
+  --color-card: var(--card);
+
+  --color-text-on-dark: var(--text-on-dark);
+  --color-text-on-dark-muted: var(--text-on-dark-muted);
+  --color-text-on-light: var(--text-on-light);
+
+  --color-accent-sky: var(--accent-sky);
+  --color-accent-sky-600: var(--accent-sky-600);
+
+  --color-pastel-peach: var(--pastel-peach);
+  --color-pastel-mint: var(--pastel-mint);
+  --color-pastel-lavender: var(--pastel-lavender);
+  --color-pastel-sky: var(--pastel-sky);
+  --color-pastel-pink: var(--pastel-pink);
+  --color-pastel-grey: var(--pastel-grey);
+
+  --color-status-signal: var(--status-signal);
+  --color-status-clear: var(--status-clear);
+  --color-status-inconclusive: var(--status-inconclusive);
+  --color-status-na: var(--status-na);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-backdrop);
+  color: var(--text-on-light);
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+code, kbd, samp, pre, .font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ink-200);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-400);
+}
+
+/* Soft transition utilities */
+.transition-lift {
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.transition-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(20, 20, 40, 0.08);
 }
